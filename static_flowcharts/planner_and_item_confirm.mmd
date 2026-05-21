@@ -1,0 +1,53 @@
+flowchart TB
+classDef start fill:#eef8ff,stroke:#2f80ed,stroke-width:2px,color:#1f3c88;
+classDef process fill:#f6f1ff,stroke:#7b61ff,stroke-width:1.5px,color:#2d225a;
+classDef decision fill:#fff7e8,stroke:#f5a623,stroke-width:1.5px,color:#6b4e00;
+classDef data fill:#eefbf3,stroke:#27ae60,stroke-width:1.5px,color:#135a33;
+
+p_start["进入 Planner"]:::start
+p_input["输入<br/>query 和 history"]:::data
+p_clear{"问题是否足够明确"}:::decision
+p_compare{"是否属于比较题"}:::decision
+p_generic{"是否属于泛问题<br/>或者只有型号没有诉求"}:::decision
+p_clarify["输出 clarification<br/>need_clarify true"]:::process
+p_kb["输出 kb_only<br/>selected_tools embedding 和 hyde"]:::process
+p_web["输出 kb_with_web<br/>selected_tools embedding hyde web_search"]:::process
+p_kg["输出 kb_with_kg 或者 kg_only"]:::process
+
+c_start["进入商品确认"]:::start
+c_extract["LLM 抽取 item_names<br/>并改写 rewritten_query"]:::process
+c_need{"Planner 是否已要求先澄清"}:::decision
+c_has_item{"是否抽取到商品名"}:::decision
+c_search["检索商品名候选"]:::process
+c_align["候选打分与对齐"]:::process
+c_confirmed{"是否确认到标准商品名"}:::decision
+c_multi{"是否存在多个中置信候选"}:::decision
+c_clarify["clarify_required<br/>直接返回澄清问题"]:::process
+c_options["clarify_options<br/>返回候选确认问题"]:::process
+c_ok["confirmed<br/>写入 item_names"]:::process
+c_continue["no_item_continue<br/>允许无商品名继续搜"]:::process
+
+p_start --> p_input --> p_clear
+p_clear -- 否 --> p_clarify
+p_clear -- 是 --> p_compare
+p_compare -- 对象不完整 --> p_clarify
+p_compare -- 对象明确 --> p_kb
+p_compare -- 否 --> p_generic
+p_generic -- 是 --> p_clarify
+p_generic -- 否 --> p_kb
+p_generic -. 官网下载时效类 .-> p_web
+p_generic -. 图谱关系类 .-> p_kg
+
+p_kb --> c_start
+p_web --> c_start
+p_kg --> c_start
+p_clarify --> c_start
+c_start --> c_extract --> c_need
+c_need -- 是 --> c_clarify
+c_need -- 否 --> c_has_item
+c_has_item -- 否 --> c_continue
+c_has_item -- 是 --> c_search --> c_align --> c_confirmed
+c_confirmed -- 是 --> c_ok
+c_confirmed -- 否 --> c_multi
+c_multi -- 是 --> c_options
+c_multi -- 否 --> c_continue

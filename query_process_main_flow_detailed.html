@@ -1,0 +1,388 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>查询主链路详细数据流程图</title>
+  <style>
+    :root {
+      --bg: #f5efe6;
+      --paper: #fffaf4;
+      --card: rgba(255,255,255,.95);
+      --ink: #21313a;
+      --muted: #60717b;
+      --line: #dbcdb9;
+      --accent: #8f4b36;
+      --accent2: #2f6d6a;
+      --accent3: #355c9a;
+      --good: #2d7b5d;
+      --warn: #9f6a17;
+      --shadow: 0 18px 36px rgba(65,45,24,.08);
+      --radius: 18px;
+      --mono: "Cascadia Code", Consolas, monospace;
+      --sans: "Microsoft YaHei UI", "PingFang SC", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--ink);
+      line-height: 1.65;
+      background:
+        radial-gradient(circle at top right, rgba(217,139,43,.08), transparent 24%),
+        linear-gradient(180deg, #faf6f0 0%, var(--bg) 100%);
+    }
+    .hero {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      padding: 28px 28px 18px;
+      background: linear-gradient(135deg, rgba(143,75,54,.10), rgba(53,92,154,.04)), var(--paper);
+      border-bottom: 1px solid rgba(143,75,54,.12);
+      backdrop-filter: blur(10px);
+    }
+    .hero h1 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 42px); }
+    .hero p { margin: 0; max-width: 1440px; color: var(--muted); font-size: 15px; }
+    .nav { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    .nav a { text-decoration: none; color: var(--ink); background: rgba(255,255,255,.88); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-size: 13px; }
+    .container { width: min(1500px, calc(100vw - 36px)); margin: 22px auto 56px; display: grid; gap: 22px; }
+    .section { background: rgba(255,250,244,.94); border: 1px solid rgba(219,205,185,.92); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px; }
+    .section h2 { margin: 0 0 10px; color: var(--accent); font-size: 28px; }
+    .lead { color: var(--muted); margin: 0 0 16px; }
+    .tip { margin: 12px 0 0; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(143,75,54,.16); background: linear-gradient(135deg, rgba(143,75,54,.08), rgba(255,255,255,.84)); }
+    .grid { display: grid; gap: 16px; }
+    .cols-2 { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+    .cols-3 { grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); }
+    .cols-4 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; }
+    .card h3 { margin: 0 0 10px; color: var(--accent2); font-size: 18px; }
+    .path { color: var(--muted); font-size: 13px; margin-bottom: 10px; word-break: break-all; }
+    .mini { color: var(--muted); font-size: 13px; }
+    .flow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; padding: 16px; border-radius: 18px; border: 1px dashed rgba(143,75,54,.24); background: linear-gradient(180deg, rgba(255,255,255,.82), rgba(255,250,244,.96)); }
+    .flow-node { min-width: 168px; flex: 1 1 168px; padding: 14px 16px; border-radius: 16px; background: #fff; border: 1px solid rgba(143,75,54,.14); font-weight: 700; }
+    .flow-node span { display: block; margin-top: 6px; font-size: 12px; color: var(--muted); font-weight: 400; }
+    .arrow { font-size: 22px; color: var(--accent); font-weight: 700; }
+    .svg-wrap { overflow: auto; border: 1px solid rgba(143,75,54,.16); border-radius: 18px; background: rgba(255,255,255,.88); padding: 12px; }
+    .svg-wrap svg { width: 100%; min-width: 1560px; height: auto; display: block; }
+    table { width: 100%; border-collapse: collapse; background: #fff; }
+    th, td { border: 1px solid rgba(219,205,185,.92); padding: 10px 12px; vertical-align: top; }
+    th { color: var(--accent); background: rgba(143,75,54,.08); text-align: left; white-space: nowrap; }
+    code, pre { font-family: var(--mono); }
+    code { background: rgba(53,92,154,.07); padding: 1px 6px; border-radius: 6px; }
+    pre { margin: 10px 0 0; padding: 14px; border-radius: 14px; overflow: auto; font-size: 13px; background: #1f2428; color: #f5f7fa; }
+    ul, ol { margin: 8px 0 0 20px; padding: 0; }
+    li { margin-bottom: 6px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; margin-right: 6px; }
+    .badge.cache { color: var(--accent3); background: rgba(53,92,154,.10); }
+    .badge.import { color: var(--good); background: rgba(45,123,93,.10); }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <h1>查询主链路详细数据流程图</h1>
+    <p>围绕当前查询主链路的核心节点：<code>planner → item_name_confirm → tool_router → 多路检索 → rrf → rerank → evidence_reflection → dynamic_reretrieval / answer_output</code>。重点描述每个节点的输入数据、输出数据、关键函数、函数职责、状态字段变更，以及主图分支控制关系；同时把新补入的 <code>Query Cache</code> 和 <code>Chunk 动态更新</code> 放回原有结构中，而不是另起一版设计。</p>
+    <nav class="nav">
+      <a href="#overview">总流程</a>
+      <a href="#state">状态字段层</a>
+      <a href="#branches">主图分支</a>
+      <a href="#visual-flow">SVG Flow</a>
+      <a href="#swimlane">Swimlane</a>
+      <a href="#function-maps">Function Maps</a>
+      <a href="#field-dicts">Field Dicts</a>
+      <a href="#cache">Query Cache</a>
+      <a href="#chunk-sync">Chunk Sync</a>
+      <a href="#planner">Planner</a>
+      <a href="#item-confirm">实体确认</a>
+      <a href="#tool-router">Tool Router</a>
+      <a href="#search">多路检索</a>
+      <a href="#rrf">RRF</a>
+      <a href="#rerank">Rerank</a>
+      <a href="#reflection">Evidence Reflection</a>
+      <a href="#retry">Dynamic Re-retrieval</a>
+      <a href="#answer">Answer Output</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section id="overview" class="section">
+      <h2>总流程</h2>
+      <p class="lead">当前主链路仍然是“先规划、再确认实体、再多路检索、再证据治理、最后回答”的 Agentic RAG。新加的能力不是平行替代主链，而是嵌进原有节点中：查询侧多层缓存负责短路重复计算，导入侧 chunk 动态更新负责让本地召回底座持续保持最新。</p>
+      <div class="tip"><strong>总原则：</strong>节点之间不是传统“上一个函数 return 给下一个函数参数”，而是都围绕同一个 <code>QueryGraphState</code> 工作。真正的数据流就是 <code>state</code> 字段在各节点之间不断增量变化。</div>
+      <div class="grid cols-3" style="margin-top:16px;">
+        <article class="card"><h3>1. 入口层</h3><div class="path">app/query_process/api/query_service.py</div><p>组装初始 <code>state</code>，写入用户问题、会话标识、默认轮次和历史信息，然后启动 LangGraph。</p></article>
+        <article class="card"><h3>2. 规划层</h3><div class="path">node_planner → node_item_name_confirm → node_tool_router</div><p>先判断问题类型、是否需要澄清、是否要查本地/联网/图谱，再翻译成执行开关。<span class="badge cache">planner cache</span></p></article>
+        <article class="card"><h3>3. 检索执行层</h3><div class="path">embedding / hyde / web_search / kg</div><p>按路由开关并发或按需执行多路召回，生成本地 chunk、HyDE 候选、网页结果和图谱占位结果。<span class="badge cache">retrieval cache</span></p></article>
+        <article class="card"><h3>4. 融合精排层</h3><div class="path">node_rrf → node_rerank</div><p>先融合本地多路召回，再把本地和 web 证据统一重排，形成最终证据池。<span class="badge cache">rerank cache</span></p></article>
+        <article class="card"><h3>5. 证据治理层</h3><div class="path">node_evidence_reflection → node_dynamic_reretrieval</div><p>判断证据是否足够支撑回答；如果不够，则重写 query、升级工具、再补检一轮。</p></article>
+        <article class="card"><h3>6. 输出层</h3><div class="path">node_answer_output</div><p>决定是直接返回澄清、保守回答，还是正式生成答案，并完成来源、图片、历史落库和流式收口。<span class="badge cache">answer cache</span></p></article>
+        <article class="card"><h3>7. Chunk 动态更新</h3><div class="path">node_diff_chunks → node_bge_embedding → node_import_milvus</div><p>导入侧按 <code>chunk_key / chunk_hash</code> 做 diff，只重算新增/更新 chunk，只删除被删 chunk，使查询侧召回永远建立在最新分片之上。<span class="badge import">incremental import</span></p></article>
+      </div>
+      <div class="flow">
+        <div class="flow-node">query_service<span>初始化 state / history</span></div><div class="arrow">→</div>
+        <div class="flow-node">planner<span>intent / task / tools / planner cache</span></div><div class="arrow">→</div>
+        <div class="flow-node">item_name_confirm<span>实体抽取 / 候选确认 / 可能提前回答</span></div><div class="arrow">→</div>
+        <div class="flow-node">tool_router<span>run_embedding / run_hyde / run_web / run_kg</span></div><div class="arrow">→</div>
+        <div class="flow-node">multi-search<span>retrieval cache + embedding / hyde / web / kg</span></div><div class="arrow">→</div>
+        <div class="flow-node">rrf + rerank<span>证据融合 / rerank cache / top docs</span></div><div class="arrow">→</div>
+        <div class="flow-node">reflection<span>判断是否需要补检索</span></div><div class="arrow">→</div>
+        <div class="flow-node">answer_output<span>answer cache / 最终输出</span></div>
+      </div>
+    </section>
+
+    <section id="state" class="section">
+      <h2>状态字段层</h2>
+      <p class="lead">下面这组字段是整条主链最重要的状态分层。缓存和动态更新新增的影响，也都能落回这些字段上。</p>
+      <div class="grid cols-4">
+        <article class="card"><h3>输入层</h3><ul><li><code>original_query</code></li><li><code>session_id</code></li><li><code>history</code></li><li><code>user_id</code> / <code>chat_id</code></li></ul></article>
+        <article class="card"><h3>规划层</h3><ul><li><code>intent_type</code></li><li><code>task_type</code></li><li><code>selected_tools</code></li><li><code>need_clarify</code></li><li><code>rewritten_query</code></li></ul></article>
+        <article class="card"><h3>检索层</h3><ul><li><code>embedding_chunks</code></li><li><code>hyde_embedding_chunks</code></li><li><code>hyde_doc</code></li><li><code>web_search_docs</code></li><li><code>kg_chunks</code></li></ul></article>
+        <article class="card"><h3>治理与输出层</h3><ul><li><code>rrf_chunks</code></li><li><code>reranked_docs</code></li><li><code>evidence_status</code></li><li><code>missing_facts</code></li><li><code>retrieval_round</code></li><li><code>answer</code></li><li><code>cache_stats</code></li></ul></article>
+      </div>
+      <div class="tip"><strong>新增字段关注点：</strong><code>cache_stats</code> 用来记录 planner / retrieval / rerank / answer 的命中情况；查询侧不会直接感知 chunk diff 细节，但召回得到的本地 chunk 内容会随着导入侧动态更新而变化。</div>
+    </section>
+
+    <section id="branches" class="section">
+      <h2>主图分支</h2>
+      <div class="grid cols-3">
+        <article class="card"><h3>分支 1：商品确认后是否直接返回</h3><p>如果 <code>node_item_name_confirm</code> 已经产生了澄清问题或候选确认问题，后续不会继续检索，而是直接进入 <code>node_answer_output</code>。</p><div class="mini">典型场景：只有型号没有诉求、多个商品候选冲突、Planner 先要求澄清。</div></article>
+        <article class="card"><h3>分支 2：Reflection 后是否补检索</h3><p>如果 <code>evidence_status</code> 是 <code>insufficient</code> 或 <code>conflicting</code>，且轮次没超限，会进入 <code>node_dynamic_reretrieval</code>，重写 query 并调整工具选择。</p></article>
+        <article class="card"><h3>分支 3：缓存是否短路节点执行</h3><p>Planner、检索、Rerank、Answer 四层都可能被缓存命中。命中后不会改变图结构，但会跳过该节点的重计算，直接写回结果字段。</p></article>
+      </div>
+    </section>
+    <section id="visual-flow" class="section">
+      <h2>SVG Flow</h2>
+      <p class="lead">这张图保持“原主链 + 分支 + 数据流”表达方式，同时把缓存命中点和导入侧 chunk 动态更新补进来。</p>
+      <div class="svg-wrap">
+        <svg viewBox="0 0 1760 860" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="query process main flow detailed">
+          <defs>
+            <marker id="arrowhead" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0,0 L12,6 L0,12 z" fill="#8f4b36"></path></marker>
+            <marker id="bluehead" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0,0 L12,6 L0,12 z" fill="#355c9a"></path></marker>
+            <marker id="greenhead" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0,0 L12,6 L0,12 z" fill="#2d7b5d"></path></marker>
+          </defs>
+          <rect x="18" y="18" width="1724" height="824" rx="26" fill="#fffaf2" stroke="#dbcdb9"/>
+          <rect x="44" y="60" width="140" height="96" rx="16" fill="#fff" stroke="#8f4b36"/>
+          <text x="114" y="92" text-anchor="middle" font-size="22" font-weight="700" fill="#8f4b36">入口</text><text x="114" y="118" text-anchor="middle" font-size="14" fill="#21313a">query_service</text><text x="114" y="138" text-anchor="middle" font-size="12" fill="#60717b">初始化 state</text>
+          <rect x="254" y="46" width="180" height="124" rx="18" fill="#fff" stroke="#8f4b36"/>
+          <text x="344" y="82" text-anchor="middle" font-size="22" font-weight="700" fill="#8f4b36">planner</text><text x="344" y="108" text-anchor="middle" font-size="13" fill="#21313a">intent / task / selected_tools</text><text x="344" y="130" text-anchor="middle" font-size="13" fill="#355c9a">planner cache</text><text x="344" y="150" text-anchor="middle" font-size="12" fill="#60717b">问题规划与短路复用</text>
+          <rect x="492" y="46" width="196" height="124" rx="18" fill="#fff" stroke="#8f4b36"/>
+          <text x="590" y="82" text-anchor="middle" font-size="20" font-weight="700" fill="#8f4b36">item_name_confirm</text><text x="590" y="108" text-anchor="middle" font-size="13" fill="#21313a">item_names / rewritten_query</text><text x="590" y="130" text-anchor="middle" font-size="13" fill="#21313a">clarify / answer?</text><text x="590" y="150" text-anchor="middle" font-size="12" fill="#60717b">实体确认或候选澄清</text>
+          <rect x="744" y="46" width="188" height="124" rx="18" fill="#fff" stroke="#8f4b36"/>
+          <text x="838" y="82" text-anchor="middle" font-size="22" font-weight="700" fill="#8f4b36">tool_router</text><text x="838" y="108" text-anchor="middle" font-size="13" fill="#21313a">run_embedding / run_hyde</text><text x="838" y="130" text-anchor="middle" font-size="13" fill="#21313a">run_web / run_kg</text><text x="838" y="150" text-anchor="middle" font-size="12" fill="#60717b">把计划翻译成执行开关</text>
+          <rect x="1020" y="28" width="182" height="110" rx="18" fill="#f7fbff" stroke="#355c9a"/>
+          <text x="1111" y="62" text-anchor="middle" font-size="20" font-weight="700" fill="#355c9a">embedding</text><text x="1111" y="88" text-anchor="middle" font-size="13" fill="#21313a">embedding_chunks</text><text x="1111" y="108" text-anchor="middle" font-size="12" fill="#355c9a">retrieval cache</text>
+          <rect x="1020" y="168" width="182" height="110" rx="18" fill="#f7fbff" stroke="#355c9a"/>
+          <text x="1111" y="202" text-anchor="middle" font-size="20" font-weight="700" fill="#355c9a">hyde</text><text x="1111" y="228" text-anchor="middle" font-size="13" fill="#21313a">hyde_doc + chunks</text><text x="1111" y="248" text-anchor="middle" font-size="12" fill="#355c9a">retrieval cache</text>
+          <rect x="1020" y="308" width="182" height="110" rx="18" fill="#f7fbff" stroke="#355c9a"/>
+          <text x="1111" y="342" text-anchor="middle" font-size="20" font-weight="700" fill="#355c9a">web_search</text><text x="1111" y="368" text-anchor="middle" font-size="13" fill="#21313a">web_search_docs</text><text x="1111" y="388" text-anchor="middle" font-size="12" fill="#60717b">联网补充证据</text>
+          <rect x="1020" y="448" width="182" height="110" rx="18" fill="#f7fbff" stroke="#355c9a"/>
+          <text x="1111" y="482" text-anchor="middle" font-size="20" font-weight="700" fill="#355c9a">kg</text><text x="1111" y="508" text-anchor="middle" font-size="13" fill="#21313a">kg_chunks</text><text x="1111" y="528" text-anchor="middle" font-size="12" fill="#60717b">图谱占位支路</text>
+          <rect x="1288" y="218" width="162" height="108" rx="18" fill="#fff" stroke="#8f4b36"/>
+          <text x="1369" y="252" text-anchor="middle" font-size="22" font-weight="700" fill="#8f4b36">rrf</text><text x="1369" y="278" text-anchor="middle" font-size="13" fill="#21313a">rrf_chunks</text><text x="1369" y="298" text-anchor="middle" font-size="12" fill="#60717b">本地多路召回融合</text>
+          <rect x="1288" y="378" width="172" height="118" rx="18" fill="#fff" stroke="#8f4b36"/>
+          <text x="1374" y="412" text-anchor="middle" font-size="22" font-weight="700" fill="#8f4b36">rerank</text><text x="1374" y="438" text-anchor="middle" font-size="13" fill="#21313a">reranked_docs</text><text x="1374" y="460" text-anchor="middle" font-size="12" fill="#355c9a">rerank cache</text><text x="1374" y="480" text-anchor="middle" font-size="12" fill="#60717b">本地 + web 统一精排</text>
+          <rect x="1526" y="378" width="176" height="118" rx="18" fill="#fff" stroke="#8f4b36"/>
+          <text x="1614" y="412" text-anchor="middle" font-size="18" font-weight="700" fill="#8f4b36">evidence_reflection</text><text x="1614" y="438" text-anchor="middle" font-size="13" fill="#21313a">evidence_status</text><text x="1614" y="460" text-anchor="middle" font-size="13" fill="#21313a">missing_facts / confidence</text><text x="1614" y="480" text-anchor="middle" font-size="12" fill="#60717b">是否支持回答</text>
+          <rect x="1288" y="604" width="192" height="116" rx="18" fill="#fff" stroke="#8f4b36"/>
+          <text x="1384" y="638" text-anchor="middle" font-size="18" font-weight="700" fill="#8f4b36">dynamic_reretrieval</text><text x="1384" y="664" text-anchor="middle" font-size="13" fill="#21313a">followup_query</text><text x="1384" y="686" text-anchor="middle" font-size="13" fill="#21313a">new selected_tools</text><text x="1384" y="706" text-anchor="middle" font-size="12" fill="#60717b">补检索重试策略</text>
+          <rect x="1526" y="594" width="176" height="126" rx="18" fill="#f7fff8" stroke="#2d7b5d"/>
+          <text x="1614" y="628" text-anchor="middle" font-size="20" font-weight="700" fill="#2d7b5d">answer_output</text><text x="1614" y="654" text-anchor="middle" font-size="13" fill="#21313a">answer / sources / images</text><text x="1614" y="676" text-anchor="middle" font-size="12" fill="#355c9a">answer cache</text><text x="1614" y="696" text-anchor="middle" font-size="12" fill="#60717b">流式收口与落库</text>
+          <rect x="72" y="656" width="236" height="120" rx="18" fill="#f7fff8" stroke="#2d7b5d"/>
+          <text x="190" y="690" text-anchor="middle" font-size="20" font-weight="700" fill="#2d7b5d">chunk 动态更新</text><text x="190" y="716" text-anchor="middle" font-size="13" fill="#21313a">diff_chunks → bge_embedding</text><text x="190" y="738" text-anchor="middle" font-size="13" fill="#21313a">→ import_milvus</text><text x="190" y="758" text-anchor="middle" font-size="12" fill="#60717b">刷新本地可召回 chunk 底座</text>
+          <path d="M184 108 H254" stroke="#8f4b36" stroke-width="4" fill="none" marker-end="url(#arrowhead)"/>
+          <path d="M434 108 H492" stroke="#8f4b36" stroke-width="4" fill="none" marker-end="url(#arrowhead)"/>
+          <path d="M688 108 H744" stroke="#8f4b36" stroke-width="4" fill="none" marker-end="url(#arrowhead)"/>
+          <path d="M932 108 H1020" stroke="#8f4b36" stroke-width="4" fill="none" marker-end="url(#arrowhead)"/>
+          <path d="M932 108 C980 108, 980 218, 1020 218" stroke="#8f4b36" stroke-width="4" fill="none" marker-end="url(#arrowhead)"/>
+          <path d="M932 108 C980 108, 980 358, 1020 358" stroke="#8f4b36" stroke-width="4" fill="none" marker-end="url(#arrowhead)"/>
+          <path d="M932 108 C980 108, 980 498, 1020 498" stroke="#8f4b36" stroke-width="4" fill="none" marker-end="url(#arrowhead)"/>
+          <path d="M1202 84 C1248 84, 1238 248, 1288 248" stroke="#355c9a" stroke-width="3" fill="none" marker-end="url(#bluehead)"/>
+          <path d="M1202 224 C1248 224, 1238 272, 1288 272" stroke="#355c9a" stroke-width="3" fill="none" marker-end="url(#bluehead)"/>
+          <path d="M1202 362 C1248 362, 1238 406, 1288 406" stroke="#355c9a" stroke-width="3" fill="none" marker-end="url(#bluehead)"/>
+          <path d="M1202 502 C1248 502, 1238 430, 1288 430" stroke="#355c9a" stroke-width="3" fill="none" marker-end="url(#bluehead)"/>
+          <path d="M1450 438 H1526" stroke="#8f4b36" stroke-width="4" fill="none" marker-end="url(#arrowhead)"/>
+          <path d="M1614 496 V594" stroke="#8f4b36" stroke-width="4" fill="none" marker-end="url(#arrowhead)"/>
+          <path d="M1526 654 H1480" stroke="#8f4b36" stroke-width="4" fill="none" marker-end="url(#arrowhead)"/>
+          <path d="M1288 664 C1170 664, 980 664, 838 170" stroke="#8f4b36" stroke-width="4" fill="none" marker-end="url(#arrowhead)"/>
+          <path d="M308 716 C612 716, 820 716, 1042 138" stroke="#2d7b5d" stroke-width="3" fill="none" marker-end="url(#greenhead)"/>
+          <text x="460" y="736" font-size="13" fill="#2d7b5d">增量导入后的最新 chunk / metadata 影响后续本地召回</text>
+          <text x="1504" y="560" font-size="13" fill="#8f4b36">证据不足 → 动态补检索 → 回到 ToolRouter</text>
+          <text x="1218" y="64" font-size="12" fill="#355c9a">命中 retrieval cache 时可跳过重算</text>
+        </svg>
+      </div>
+    </section>
+
+    <section id="swimlane" class="section">
+      <h2>Swimlane</h2>
+      <table>
+        <tr><th>节点</th><th>输入</th><th>核心处理</th><th>输出</th></tr>
+        <tr><td>planner</td><td><code>original_query</code>、<code>history</code></td><td>先查 <code>planner cache</code>；未命中时调用 LLM 判断意图、任务类型、工具策略与澄清需求。</td><td><code>intent_type</code>、<code>task_type</code>、<code>selected_tools</code>、<code>need_clarify</code></td></tr>
+        <tr><td>item_name_confirm</td><td><code>original_query</code>、<code>history</code>、商品名候选库</td><td>抽取 <code>item_names</code> 和 <code>rewritten_query</code>，对齐 item name 向量库，决定是确认实体、候选澄清还是允许无实体继续检索。</td><td><code>item_names</code>、<code>rewritten_query</code>、<code>confirmation_mode</code>、必要时直接写 <code>answer</code></td></tr>
+        <tr><td>embedding / hyde / web / kg</td><td><code>rewritten_query</code>、<code>selected_tools</code>、<code>item_names</code></td><td>按开关执行多路召回；embedding / hyde 先查 <code>retrieval cache</code>，未命中再生成向量并检索 Milvus。</td><td><code>embedding_chunks</code>、<code>hyde_embedding_chunks</code>、<code>hyde_doc</code>、<code>web_search_docs</code>、<code>kg_chunks</code></td></tr>
+        <tr><td>rrf / rerank</td><td><code>embedding_chunks</code>、<code>hyde_embedding_chunks</code>、<code>web_search_docs</code></td><td>先将本地多路结果做 RRF 去重融合，再把本地和 web 统一标准化后重排；Rerank 支持缓存命中短路。</td><td><code>rrf_chunks</code>、<code>reranked_docs</code></td></tr>
+        <tr><td>evidence_reflection</td><td><code>rewritten_query</code>、<code>reranked_docs</code></td><td>审查证据是否足够回答，输出证据状态、缺失事实与信心；决定是否进入二轮补检索。</td><td><code>evidence_status</code>、<code>missing_facts</code>、<code>confidence</code></td></tr>
+        <tr><td>dynamic_reretrieval</td><td><code>missing_facts</code>、<code>selected_tools</code>、<code>retrieval_round</code></td><td>生成 <code>followup_query</code> 和下一轮工具策略，回到 ToolRouter 继续检索。</td><td><code>rewritten_query</code>、<code>selected_tools</code>、<code>retrieval_round</code></td></tr>
+        <tr><td>answer_output</td><td><code>answer?</code>、<code>reranked_docs</code>、<code>evidence_status</code></td><td>先看上游是否已给答案，再查 <code>answer cache</code>；未命中才正式生成答案，并附带来源、图片和历史落库。</td><td><code>answer</code>、<code>done_list</code>、<code>sources</code>、<code>cache_stats</code></td></tr>
+      </table>
+    </section>
+
+    <section id="function-maps" class="section">
+      <h2>Function Maps</h2>
+      <div class="grid cols-2">
+        <article class="card"><h3>查询主链函数图</h3><pre>run_query_graph()
+  -> build_default_state()
+  -> query_app.invoke(state)
+     -> node_planner()
+     -> node_item_name_confirm()
+     -> node_tool_router()
+     -> node_search_embedding()
+     -> node_search_embedding_hyde()
+     -> node_web_search_mcp()
+     -> node_query_kg()
+     -> node_rrf()
+     -> node_rerank()
+     -> node_evidence_reflection()
+     -> node_dynamic_reretrieval()
+     -> node_answer_output()</pre></article>
+        <article class="card"><h3>新增缓存 / 动态更新关联函数</h3><pre>planner:
+  get_planner_cache()
+  set_planner_cache()
+
+retrieval:
+  resolve_stable_query_text()
+  get_retrieval_cache()
+  set_retrieval_cache()
+
+rerank:
+  get_rerank_cache()
+  set_rerank_cache()
+
+answer:
+  get_answer_cache()
+  set_answer_cache()
+
+incremental import:
+  node_diff_chunks()
+  node_bge_embedding()
+  node_import_milvus()
+  document_registry.save_document_snapshot()</pre></article>
+      </div>
+    </section>
+
+    <section id="field-dicts" class="section">
+      <h2>Field Dicts</h2>
+      <table>
+        <tr><th>字段</th><th>首次出现</th><th>含义</th><th>后续用途</th></tr>
+        <tr><td><code>selected_tools</code></td><td>planner</td><td>当前轮允许执行的检索工具集合</td><td>tool_router 翻译成 run 开关；dynamic_reretrieval 可二次改写</td></tr>
+        <tr><td><code>rewritten_query</code></td><td>item_name_confirm</td><td>补全实体后的可检索查询文本</td><td>embedding / hyde / web 等检索入口统一使用</td></tr>
+        <tr><td><code>embedding_chunks</code></td><td>node_search_embedding</td><td>本地主召回结果</td><td>进入 rrf</td></tr>
+        <tr><td><code>hyde_doc</code></td><td>node_search_embedding_hyde</td><td>HyDE 生成的假设文档</td><td>辅助解释召回来源，也可进入评测输出</td></tr>
+        <tr><td><code>rrf_chunks</code></td><td>node_rrf</td><td>本地多路召回融合结果</td><td>与 web 结果一起进入 rerank</td></tr>
+        <tr><td><code>reranked_docs</code></td><td>node_rerank</td><td>最终证据池</td><td>供 reflection 判断与 answer 生成</td></tr>
+        <tr><td><code>evidence_status</code></td><td>node_evidence_reflection</td><td>证据是否足以回答</td><td>控制是否进入动态补检索</td></tr>
+        <tr><td><code>cache_stats</code></td><td>多节点</td><td>缓存命中与写回统计</td><td>离线评测、调优和链路解释</td></tr>
+      </table>
+    </section>
+    <section id="cache" class="section">
+      <h2>Query Cache</h2>
+      <p class="lead">缓存不是单独一条链，而是分散在原主链多个节点中的短路层。命中时节点仍然“走到”，但会跳过重算并直接回写结果字段。</p>
+      <div class="grid cols-2">
+        <article class="card"><h3>缓存覆盖阶段</h3><ul><li><code>planner cache</code>：复用意图识别、任务类型、工具规划与澄清结论。</li><li><code>retrieval cache</code>：复用 <code>embedding</code> / <code>HyDE</code> 召回结果与 <code>hyde_doc</code>。</li><li><code>rerank cache</code>：复用统一候选集的精排结果 <code>reranked_docs</code>。</li><li><code>answer cache</code>：复用最终答案文本、部分来源组织结果和构造后的 prompt。</li></ul></article>
+        <article class="card"><h3>缓存键稳定化</h3><ul><li>通过 <code>resolve_stable_query_text()</code> 尽量把口语化 query 归一为稳定 key。</li><li>planner / answer key 会带上 prompt 版本或模型相关因素，避免旧结果污染新逻辑。</li><li>retrieval key 会编码 <code>retrieval_type</code>、<code>topk</code>、索引版本等参数。</li><li>rerank / answer key 需要包含候选文档身份，否则无法保证语义等价。</li></ul></article>
+      </div>
+    </section>
+
+    <section id="chunk-sync" class="section">
+      <h2>Chunk Sync</h2>
+      <p class="lead">这部分不在查询图内部执行，但它直接决定查询图中本地召回能拿到什么内容，因此必须并入总体说明。</p>
+      <div class="grid cols-2">
+        <article class="card"><h3>增量更新主流程</h3><ol><li>文档切分后得到当前版本 chunk 集合。</li><li>从 <code>document_registry</code> 读取历史 snapshot。</li><li>按 <code>chunk_key</code> 和 <code>chunk_hash</code> 比较，得到 <code>added / updated / deleted / unchanged</code>。</li><li>只对 <code>added + updated</code> 重做 embedding。</li><li>对 <code>deleted</code> 和旧版本变更 chunk 做定向删除与 metadata 同步。</li><li>回写最新 snapshot，供下一次 diff 使用。</li></ol></article>
+        <article class="card"><h3>对查询链的影响</h3><ul><li>查询节点无需感知 diff 细节，但本地召回底层内容是动态更新后的最新 chunk。</li><li>比全量重建更快，也减少了旧 chunk 残留、章节迁移后重复命中的问题。</li><li>如果缓存 key 没绑定索引版本，理论上可能复用到旧召回结果，因此 retrieval cache 设计必须考虑版本因素。</li></ul></article>
+      </div>
+    </section>
+
+    <section id="planner" class="section">
+      <h2>Planner</h2>
+      <div class="path">app/query_process/agent/nodes/node_planner.py</div>
+      <div class="grid cols-3">
+        <article class="card"><h3>输入</h3><ul><li><code>original_query</code></li><li><code>history</code></li></ul></article>
+        <article class="card"><h3>做什么</h3><ul><li>判断是不是参数问答、比较题、泛问、时效性问题。</li><li>决定是否先澄清。</li><li>决定首轮是否启用本地库、HyDE、Web、KG。</li></ul></article>
+        <article class="card"><h3>输出</h3><ul><li><code>intent_type</code></li><li><code>task_type</code></li><li><code>selected_tools</code></li><li><code>need_clarify</code></li></ul></article>
+      </div>
+      <div class="tip"><strong>新增点：</strong>节点入口先走 <code>get_planner_cache()</code>，规划完成后用 <code>set_planner_cache()</code> 回写；命中时仍会把结果回填到 state，所以下游节点不需要知道它来自缓存还是实时规划。</div>
+    </section>
+
+    <section id="item-confirm" class="section">
+      <h2>实体确认</h2>
+      <div class="path">app/query_process/agent/nodes/node_item_name_confirm.py</div>
+      <div class="grid cols-3">
+        <article class="card"><h3>输入</h3><ul><li><code>original_query</code></li><li><code>history</code></li><li>商品名候选库</li></ul></article>
+        <article class="card"><h3>做什么</h3><ul><li>抽取或补全 <code>item_names</code>。</li><li>生成更适合检索的 <code>rewritten_query</code>。</li><li>对齐商品库并决定是确认、候选澄清还是无实体继续检索。</li></ul></article>
+        <article class="card"><h3>输出</h3><ul><li><code>item_names</code></li><li><code>rewritten_query</code></li><li><code>confirmation_mode</code></li><li>必要时直接写 <code>answer</code></li></ul></article>
+      </div>
+    </section>
+
+    <section id="tool-router" class="section">
+      <h2>Tool Router</h2>
+      <div class="path">app/query_process/agent/nodes/node_tool_router.py</div>
+      <div class="grid cols-2">
+        <article class="card"><h3>节点职责</h3><p>把 Planner 给出的高层工具计划翻译成图内各检索节点可执行的布尔开关，例如 <code>run_embedding</code>、<code>run_hyde</code>、<code>run_web_search</code>、<code>run_kg</code>。</p></article>
+        <article class="card"><h3>为什么单独有这一层</h3><p>这样图结构可以保持稳定，具体某一路是否执行由状态控制，而不是运行时动态改图。二轮补检索时也只需要重写工具开关即可。</p></article>
+      </div>
+    </section>
+
+    <section id="search" class="section">
+      <h2>多路检索</h2>
+      <div class="grid cols-2">
+        <article class="card"><h3>Embedding</h3><div class="path">app/query_process/agent/nodes/node_search_embedding.py</div><ul><li>核心输出：<code>embedding_chunks</code></li><li>支持 item_name 过滤与全库召回兜底</li><li>命中 <code>retrieval cache</code> 时跳过向量生成和 Milvus 查询</li></ul></article>
+        <article class="card"><h3>HyDE</h3><div class="path">app/query_process/agent/nodes/node_search_embedding_hyde.py</div><ul><li>先生成 <code>hyde_doc</code>，再做二次向量召回</li><li>用于弥补短问句、弱表达和隐含意图问题</li><li>同样支持 <code>retrieval cache</code></li></ul></article>
+        <article class="card"><h3>Web Search</h3><div class="path">app/query_process/agent/nodes/node_web_search_mcp.py</div><ul><li>输出：<code>web_search_docs</code></li><li>补充时效性、官网和下载类信息</li><li>后续在 rerank 阶段与本地文档统一打分</li></ul></article>
+        <article class="card"><h3>KG</h3><div class="path">app/query_process/agent/nodes/node_query_kg.py</div><ul><li>当前更多是占位支路</li><li>为后续图谱问答和关系推理预留入口</li><li>状态字段统一为 <code>kg_chunks</code></li></ul></article>
+      </div>
+    </section>
+    <section id="rrf" class="section">
+      <h2>RRF</h2>
+      <div class="path">app/query_process/agent/nodes/node_rrf.py</div>
+      <p>这一层只负责本地多路结果融合，主要处理 <code>embedding_chunks</code> 和 <code>hyde_embedding_chunks</code> 的去重、对齐和 Reciprocal Rank Fusion 计算，输出 <code>rrf_chunks</code>。Web 结果不在这里和本地结果混排，而是留到下一层统一标准化后再进入 Rerank。</p>
+    </section>
+
+    <section id="rerank" class="section">
+      <h2>Rerank</h2>
+      <div class="path">app/query_process/agent/nodes/node_rerank.py</div>
+      <div class="grid cols-3">
+        <article class="card"><h3>输入</h3><ul><li><code>rrf_chunks</code></li><li><code>web_search_docs</code></li><li><code>rewritten_query</code></li></ul></article>
+        <article class="card"><h3>做什么</h3><ul><li>统一本地和 web 的文档结构</li><li>调用 reranker 计算相关性</li><li>动态截断 TopK，产出最终证据池</li></ul></article>
+        <article class="card"><h3>输出</h3><ul><li><code>reranked_docs</code></li><li>供 reflection 和 answer 共享使用</li></ul></article>
+      </div>
+      <div class="tip"><strong>新增点：</strong>这里加入了 <code>get_rerank_cache()</code> / <code>set_rerank_cache()</code>。同一候选文档集合二次进入时，可直接复用精排结果，避免反复 rerank。</div>
+    </section>
+
+    <section id="reflection" class="section">
+      <h2>Evidence Reflection</h2>
+      <div class="path">app/query_process/agent/nodes/node_evidence_reflection.py</div>
+      <div class="grid cols-2">
+        <article class="card"><h3>输入与判断</h3><p>输入是 <code>rewritten_query</code>、<code>item_names</code>、<code>reranked_docs</code>。节点会判断现有证据是否足够支持回答，还是存在缺失、冲突、空洞。</p></article>
+        <article class="card"><h3>输出与控制</h3><ul><li><code>evidence_status</code>：例如 <code>sufficient</code>、<code>insufficient</code>、<code>conflicting</code>、<code>unknown</code></li><li><code>missing_facts</code>：指导下一轮补检索</li><li><code>confidence</code>：辅助 answer_output 做输出策略</li></ul></article>
+      </div>
+    </section>
+
+    <section id="retry" class="section">
+      <h2>Dynamic Re-retrieval</h2>
+      <div class="path">app/query_process/agent/nodes/node_dynamic_reretrieval.py</div>
+      <div class="grid cols-2">
+        <article class="card"><h3>节点职责</h3><p>当 Reflection 认为证据不足且轮次允许时，生成新的 <code>followup_query</code>、升级或收缩 <code>selected_tools</code>，并把 <code>retrieval_round</code> 加一，回到 ToolRouter 再来一轮。</p></article>
+        <article class="card"><h3>为什么重要</h3><p>这一步把系统从“固定召回一次”提升为“基于证据反思的可控二轮检索”，是当前链路区别于普通 RAG 的关键点之一。</p></article>
+      </div>
+    </section>
+
+    <section id="answer" class="section">
+      <h2>Answer Output</h2>
+      <div class="path">app/query_process/agent/nodes/node_answer_output.py</div>
+      <div class="grid cols-3">
+        <article class="card"><h3>进入条件</h3><ul><li>item_name_confirm 已经给出澄清问题</li><li>reflection 判断证据已足够</li><li>或补检索结束后进入最终收口</li></ul></article>
+        <article class="card"><h3>节点动作</h3><ul><li>优先使用上游已写入的 <code>answer</code></li><li>否则查 <code>answer cache</code></li><li>未命中时正式构造 prompt 生成答案</li><li>整理来源、图片、done_list 和历史消息</li></ul></article>
+        <article class="card"><h3>输出</h3><ul><li><code>answer</code></li><li><code>sources</code></li><li><code>done_list</code></li><li><code>cache_stats</code></li></ul></article>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

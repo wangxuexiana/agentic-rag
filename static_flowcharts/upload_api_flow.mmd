@@ -1,0 +1,19 @@
+flowchart TB
+classDef start fill:#eef8ff,stroke:#2f80ed,stroke-width:2px,color:#1f3c88;
+classDef process fill:#f6f1ff,stroke:#7b61ff,stroke-width:1.5px,color:#2d225a;
+classDef decision fill:#fff7e8,stroke:#f5a623,stroke-width:1.5px,color:#6b4e00;
+classDef finalcls fill:#edfdfd,stroke:#20b2aa,stroke-width:2px,color:#115e59;
+
+u_start["收到上传请求"]:::start
+u_name{"文件名是否存在"}:::decision
+u_ext{"后缀是否为 md 或 pdf"}:::decision
+u_safe["清洗安全文件名"]:::process
+u_task["保存文件并创建导入任务"]:::process
+u_400["返回 400"]:::finalcls
+u_200["返回 200 和 task_id"]:::finalcls
+
+u_start --> u_name
+u_name -- 否 --> u_400
+u_name -- 是 --> u_ext
+u_ext -- 否 --> u_400
+u_ext -- 是 --> u_safe --> u_task --> u_200

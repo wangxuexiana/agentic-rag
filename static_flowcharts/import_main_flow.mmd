@@ -1,0 +1,30 @@
+flowchart LR
+classDef start fill:#eef8ff,stroke:#2f80ed,stroke-width:2px,color:#1f3c88;
+classDef process fill:#f6f1ff,stroke:#7b61ff,stroke-width:1.5px,color:#2d225a;
+classDef decision fill:#fff7e8,stroke:#f5a623,stroke-width:1.5px,color:#6b4e00;
+classDef data fill:#eefbf3,stroke:#27ae60,stroke-width:1.5px,color:#135a33;
+classDef finalcls fill:#edfdfd,stroke:#20b2aa,stroke-width:2px,color:#115e59;
+
+i_start["上传文件"]:::start
+i_file["输入文件<br/>md 或 pdf"]:::data
+i_type{"文件类型是否支持"}:::decision
+i_task["1 创建导入任务<br/>返回 task_id"]:::process
+i_entry["2 node_entry<br/>检查路径 文件存在 后缀合法"]:::process
+i_pass{"入口校验是否通过"}:::decision
+i_parse["3 文档解析<br/>PDF 转 Markdown 或直接读取 Markdown"]:::process
+i_img["4 多模态图片理解<br/>可选处理图片内容"]:::process
+i_split["5 智能文档切片<br/>按标题切分 超长再切 过短合并"]:::process
+i_chunks["chunks"]:::data
+i_item["6 主体识别与标签提取<br/>识别商品名 并做防幻觉回退"]:::process
+i_meta["item_name 和 metadata"]:::data
+i_embed["7 混合向量化<br/>稠密向量 和 稀疏向量"]:::process
+i_vectors["dense_vector 和 sparse_vector"]:::data
+i_store["8 数据持久化<br/>写入 Milvus 和 item_name 库"]:::process
+i_done["任务完成"]:::finalcls
+i_fail["任务失败"]:::finalcls
+
+i_start --> i_file --> i_type
+i_type -- 否 --> i_fail
+i_type -- 是 --> i_task --> i_entry --> i_pass
+i_pass -- 否 --> i_fail
+i_pass -- 是 --> i_parse --> i_img --> i_split --> i_chunks --> i_item --> i_meta --> i_embed --> i_vectors --> i_store --> i_done

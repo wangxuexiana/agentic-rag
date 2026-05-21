@@ -1,0 +1,36 @@
+flowchart LR
+classDef start fill:#eef8ff,stroke:#2f80ed,stroke-width:2px,color:#1f3c88;
+classDef process fill:#f6f1ff,stroke:#7b61ff,stroke-width:1.5px,color:#2d225a;
+classDef decision fill:#fff7e8,stroke:#f5a623,stroke-width:1.5px,color:#6b4e00;
+classDef data fill:#eefbf3,stroke:#27ae60,stroke-width:1.5px,color:#135a33;
+classDef finalcls fill:#edfdfd,stroke:#20b2aa,stroke-width:2px,color:#115e59;
+
+q_start["用户发起问题"]:::start
+q_input["输入数据<br/>query 和 session_id"]:::data
+q_history["历史数据<br/>history 和 MongoDB"]:::data
+q_itemdb["商品库<br/>kb_item_names"]:::data
+q_chunks["检索结果<br/>kb_chunks web_chunks kg_chunks"]:::data
+q_return["返回结果<br/>answer done_list sources confidence"]:::data
+
+q_plan["1 任务规划<br/>Planner<br/>输出 intent_type task_type selected_tools need_clarify"]:::process
+q_confirm["2 商品确认<br/>ItemConfirm<br/>输出 item_names rewritten_query confirmation_mode"]:::process
+q_direct{"是否已经生成澄清问题<br/>或者候选确认问题"}:::decision
+q_router["3 工具路由<br/>ToolRouter<br/>输出 run_embedding run_hyde run_web run_kg"]:::process
+q_search["4 多路检索<br/>Embedding HyDE Web KG"]:::process
+q_merge["5 融合与精排<br/>Join RRF Rerank"]:::process
+q_reflect["6 证据反思<br/>Reflection<br/>输出 evidence_status missing_facts confidence"]:::process
+q_retry{"证据是否不足并且<br/>仍允许继续补检索"}:::decision
+q_dynamic["7 动态补检索<br/>DynamicRetrieval<br/>输出 followup_query 和新 selected_tools"]:::process
+q_output["8 最终输出<br/>AnswerOutput<br/>输出 直答 澄清 保守回答 拒答"]:::process
+q_end["结束"]:::finalcls
+
+q_start --> q_input --> q_plan
+q_history --> q_plan
+q_plan --> q_confirm
+q_history --> q_confirm
+q_itemdb --> q_confirm
+q_confirm --> q_direct
+q_direct -- 是 --> q_output
+q_direct -- 否 --> q_router --> q_search --> q_chunks --> q_merge --> q_reflect --> q_retry
+q_retry -- 是 --> q_dynamic --> q_router
+q_retry -- 否 --> q_output --> q_return --> q_end

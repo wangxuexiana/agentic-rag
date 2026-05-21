@@ -1,0 +1,26 @@
+# Environment (contains API keys)
+.env
+
+# Large document files
+doc/
+
+# Markdown notes
+md/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+.venv/
+.venv-py313-backup/
+
+# Logs
+logs/
+
+# Output
+output/
+
+# IDE
+.idea/

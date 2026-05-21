@@ -1,0 +1,20 @@
+flowchart TB
+classDef start fill:#eef8ff,stroke:#2f80ed,stroke-width:2px,color:#1f3c88;
+classDef process fill:#f6f1ff,stroke:#7b61ff,stroke-width:1.5px,color:#2d225a;
+classDef decision fill:#fff7e8,stroke:#f5a623,stroke-width:1.5px,color:#6b4e00;
+classDef data fill:#eefbf3,stroke:#27ae60,stroke-width:1.5px,color:#135a33;
+classDef finalcls fill:#edfdfd,stroke:#20b2aa,stroke-width:2px,color:#115e59;
+
+a_start["进入 AnswerOutput"]:::start
+a_input["输入<br/>answer reranked_docs evidence_status confidence"]:::data
+a_reason{"进入输出节点的原因"}:::decision
+a_clarify["输出澄清问题<br/>或者候选确认问题"]:::process
+a_normal["基于证据正常作答"]:::process
+a_safe["输出保守回答<br/>或者拒答"]:::process
+a_result["最终返回<br/>answer sources done_list"]:::data
+a_end["返回给用户"]:::finalcls
+
+a_start --> a_input --> a_reason
+a_reason -- 前面已经生成 answer --> a_clarify --> a_result --> a_end
+a_reason -- 证据充分 --> a_normal --> a_result --> a_end
+a_reason -- 证据不足并且不再补检索 --> a_safe --> a_result --> a_end

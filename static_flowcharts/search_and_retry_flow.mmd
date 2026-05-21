@@ -1,0 +1,33 @@
+flowchart LR
+classDef start fill:#eef8ff,stroke:#2f80ed,stroke-width:2px,color:#1f3c88;
+classDef process fill:#f6f1ff,stroke:#7b61ff,stroke-width:1.5px,color:#2d225a;
+classDef decision fill:#fff7e8,stroke:#f5a623,stroke-width:1.5px,color:#6b4e00;
+classDef data fill:#eefbf3,stroke:#27ae60,stroke-width:1.5px,color:#135a33;
+
+s_router["ToolRouter"]:::start
+s_flags["执行开关<br/>run_embedding run_hyde run_web run_kg"]:::data
+s_embed["Embedding 检索<br/>本地向量召回"]:::process
+s_hyde["HyDE 检索<br/>先生成假设文本再召回"]:::process
+s_web["Web Search<br/>外部联网召回"]:::process
+s_kg["KG 检索<br/>当前占位"]:::process
+s_kb_data["kb_chunks"]:::data
+s_hyde_data["hyde_chunks"]:::data
+s_web_data["web_chunks"]:::data
+s_kg_data["kg_chunks"]:::data
+s_join["Join 汇总四路结果"]:::process
+s_rrf["RRF 融合排序"]:::process
+s_rerank["Rerank 精排"]:::process
+s_docs["reranked_docs"]:::data
+s_reflect["Reflection<br/>判断 evidence_status confidence missing_facts"]:::process
+s_retry{"是否进入下一轮补检索"}:::decision
+s_dynamic["DynamicRetrieval<br/>生成 followup_query 和新工具策略"]:::process
+s_output["进入 AnswerOutput"]:::process
+
+s_router --> s_flags
+s_flags --> s_embed --> s_kb_data --> s_join
+s_flags --> s_hyde --> s_hyde_data --> s_join
+s_flags --> s_web --> s_web_data --> s_join
+s_flags --> s_kg --> s_kg_data --> s_join
+s_join --> s_rrf --> s_rerank --> s_docs --> s_reflect --> s_retry
+s_retry -- 是 --> s_dynamic --> s_router
+s_retry -- 否 --> s_output

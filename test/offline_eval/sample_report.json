@@ -1,0 +1,79 @@
+{
+  "summary": {
+    "total": 3,
+    "passed": 3,
+    "pass_rate": 1.0,
+    "tool_selection_accuracy": 1.0,
+    "must_have_accuracy": 1.0,
+    "must_not_have_accuracy": 1.0,
+    "abstain_accuracy": 1.0,
+    "avg_final_confidence": 0.6667,
+    "second_round_trigger_rate": 0.6667
+  },
+  "failed_cases": [],
+  "all_case_scores": [
+    {
+      "case_id": "kb_param_001",
+      "http_ok": true,
+      "tool_ok": true,
+      "must_have_ok": true,
+      "must_not_have_ok": true,
+      "abstain_ok": true,
+      "passed": true,
+      "selected_tools_round1": [
+        "embedding",
+        "hyde"
+      ],
+      "expected_tools": [
+        "embedding",
+        "hyde"
+      ],
+      "retrieval_round_count": 1,
+      "evidence_status": "sufficient",
+      "final_confidence": 0.95,
+      "answer_preview": "测试设备E的功率是550W。参考说明：\n证据判断：证据较充分\n置信度：95%\n支持度：100%\n覆盖度：100%\n一致性：100%\n判断依据：证据1明确提供了测试设备E的功率为550W，可直接回答问题。\n参考来源：\n1. 测试设备E [local] (chunk_id=466131449532121324)"
+    },
+    {
+      "case_id": "kb_unknown_001",
+      "http_ok": true,
+      "tool_ok": true,
+      "must_have_ok": true,
+      "must_not_have_ok": true,
+      "abstain_ok": true,
+      "passed": true,
+      "selected_tools_round1": [
+        "embedding",
+        "hyde"
+      ],
+      "expected_tools": [
+        "embedding",
+        "hyde"
+      ],
+      "retrieval_round_count": 2,
+      "evidence_status": "sufficient",
+      "final_confidence": 0.95,
+      "answer_preview": "根据参考内容，测试设备E（即LitePoint IQxel-M2W7G无线测试仪）的无线连接接口类型包括Wi-Fi 6E（802.11ax）和蓝牙5.2。该设备支持蓝牙功能，具体为蓝牙5.2的射频和协议测试。参考说明：\n证据判断：证据较充分\n置信度：95%\n支持度：95%\n覆盖度：95%\n一致性：95%\n判断依据：证据明确说明测试设备支持Wi-Fi和蓝牙标准，且具体提及蓝牙5.2，可直接回答问题。\n参考来源：\n1. 无线连接测试仪 [web] https://baike.baidu.com/item/无线连接测试仪/55492232\n2. LitePoint(莱特波特)IQxel-M2W7G "
+    },
+    {
+      "case_id": "abstain_001",
+      "http_ok": true,
+      "tool_ok": true,
+      "must_have_ok": true,
+      "must_not_have_ok": true,
+      "abstain_ok": true,
+      "passed": true,
+      "selected_tools_round1": [
+        "embedding",
+        "hyde"
+      ],
+      "expected_tools": [
+        "embedding",
+        "hyde"
+      ],
+      "retrieval_round_count": 2,
+      "evidence_status": "insufficient",
+      "final_confidence": 0.1,
+      "answer_preview": "根据当前检索到的证据，我暂时不能确认当前问题的结论。\n原因：证据未提及设备Z99的具体信息，无法判断其是否具备量子通信硬件或协议支持及兼容量子密钥分发技术。\n仍缺少的信息：\n1. 设备Z99的型号规格与技术参数\n2. 设备Z99是否集成QKD模块或支持相关协议（如BB84、E91等）\n3. 设备Z99是否参与量子城域网或京沪干线等实际部署项目\n建议补充更准确的产品型号、官方规格页或说明书原文后再确认。\n\n参考说明：\n证据判断：证据不足\n置信度：10%\n支持度：20%\n覆盖度：10%\n一致性：90%\n判断依据：证据未提及设备Z99的具体信息，无法判断其是否具备量子通信硬件或协议支持及兼容量子密钥"
+    }
+  ]
+}

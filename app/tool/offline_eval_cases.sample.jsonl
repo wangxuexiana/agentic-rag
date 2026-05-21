@@ -1,0 +1,3 @@
+{"case_id":"kb_param_001","query":"测试设备E 功率是多少？","gold_answer":"550W","gold_item_names":["测试设备E"],"expected_tools":["embedding","hyde"],"must_have_keywords":["550W"],"must_not_have_keywords":["2200W"],"should_abstain":false,"notes":"本地知识库直接可答"}
+{"case_id":"kb_unknown_001","query":"测试设备E 支持蓝牙吗？","gold_answer":"","gold_item_names":["测试设备E"],"expected_tools":["embedding","hyde"],"must_have_keywords":[],"must_not_have_keywords":[],"should_abstain":false,"notes":"本地不足时应触发二轮补检索"}
+{"case_id":"abstain_001","query":"一个库里不存在的设备Z99 支持量子通信吗？","gold_answer":"","gold_item_names":["设备Z99"],"expected_tools":["embedding","hyde"],"must_have_keywords":[],"must_not_have_keywords":["明确支持量子通信"],"should_abstain":true,"notes":"应保守回答或拒答"}
