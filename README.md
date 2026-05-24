@@ -1,6 +1,6 @@
-# Zhiku
+# Knowledge RAG
 
-Zhiku 是一个面向企业设备文档的 Agentic RAG 知识库系统。项目围绕“文档导入”和“智能问答”两条主流程构建：导入侧负责解析 PDF/Markdown、处理图片、切分文档、识别产品名称、生成向量并写入 Milvus；查询侧基于 LangGraph 编排规划、产品确认、多路检索、RRF 融合、重排序、证据反思和答案生成。
+Knowledge RAG 是一个面向企业设备文档的 Agentic RAG 知识库系统。项目围绕“文档导入”和“智能问答”两条主流程构建：导入侧负责解析 PDF/Markdown、处理图片、切分文档、识别产品名称、生成向量并写入 Milvus；查询侧基于 LangGraph 编排规划、产品确认、多路检索、RRF 融合、重排序、证据反思和答案生成。
 
 ## 功能特性
 

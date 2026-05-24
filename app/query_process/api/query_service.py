@@ -1,7 +1,7 @@
 """
 查询服务 (Query Service) — FastAPI 应用
 
-本模块是「掌柜智库」查询流程的 Web 入口，负责接收前端请求并调度 LangGraph 查询图。
+本模块是「Knowledge RAG」查询流程的 Web 入口，负责接收前端请求并调度 LangGraph 查询图。
 
 核心职责：
 1. 暴露 REST API 端点，支持同步/流式两种查询模式
@@ -48,7 +48,7 @@ bootstrap_langsmith()
 
 
 # 定义fastapi对象
-app = FastAPI(title="query service",description="掌柜智库查询服务！")
+app = FastAPI(title="query service", description="Knowledge RAG 查询服务")
 # 跨域问题解决
 app.add_middleware(
     CORSMiddleware,

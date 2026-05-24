@@ -1,5 +1,5 @@
 """
-掌柜智库（zhiku）- 企业级RAG知识库系统
+Knowledge RAG - 企业级RAG知识库系统
 
 项目概述：
     本项目是一个基于 LangGraph 的 Agentic RAG（检索增强生成）系统，
@@ -36,14 +36,14 @@
 from fastapi import FastAPI
 
 app = FastAPI(
-    title="掌柜智库 - 企业级RAG知识库系统",
+    title="Knowledge RAG - 企业级RAG知识库系统",
     description="Agentic RAG系统：文档导入 + 智能查询"
 )
 
 @app.get("/")
 def read_root():
     """健康检查接口，确认服务启动状态"""
-    return {"Hello": "World", "service": "zhiku"}
+    return {"Hello": "World", "service": "knowledge-rag"}
 
 
 # ──────────────────────────────────────────────────────────
