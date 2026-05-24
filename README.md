@@ -207,4 +207,4 @@ uv run python -m compileall app main.py
 
 ## 许可证
 
-当前仓库尚未声明许可证。若需要开源发布，请补充 `LICENSE` 文件。
+本项目基于 MIT License 开源，详见 [LICENSE](LICENSE)。
