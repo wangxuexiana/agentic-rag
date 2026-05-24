@@ -24,7 +24,7 @@ from app.core.load_prompt import load_prompt
 from app.core.logger import logger
 from app.lm.embedding_utils import generate_embeddings
 from app.lm.llm_utils import get_llm_client
-from app.query_process.agent.services import cache_key_service, query_cache_service
+from app.query_process.agent.services.cache_decorator import RetrievalCache
 from app.utils.debug_trace_utils import append_trace_event
 from app.utils.escape_milvus_string_utils import escape_milvus_string
 from app.utils.task_utils import add_done_task, add_running_task
@@ -52,56 +52,30 @@ def node_search_embedding_hyde(state):
 
     rewritten_query = state.get("rewritten_query") or state.get("original_query") or ""
     item_names = state.get("item_names") or []
-    stable_query = cache_key_service.resolve_stable_query_text(
-        original_query=state.get("original_query") or "",
-        rewritten_query=state.get("rewritten_query") or "",
-        item_names=item_names,
-    )
     logger.info(f"HyDE 检索输入: query='{rewritten_query}', item_names={item_names}")
 
-    cached_result = query_cache_service.get_retrieval_cache(
-        retrieval_type="hyde",
-        query=stable_query,
-        item_names=item_names,
-        topk=HYDE_TOPK,
-    )
-    if cached_result:
-        logger.info("HyDE retrieval 命中缓存，跳过 HyDE 生成与 Milvus 检索")
-        hyde_embedding_chunks = list(cached_result.get("hyde_embedding_chunks") or [])
-        hyde_doc = cached_result.get("hyde_doc", "")
-        cache_hit = True
-    else:
-        cache_hit = False
-        hyde_doc = step_1_create_hyde_doc(rewritten_query)
-        hyde_embedding_chunks = step_2_search_embedding_hyde(
+    def _compute_hyde():
+        """生成 HyDE 文档并执行检索，返回 (chunks, extra_data)。"""
+        doc = step_1_create_hyde_doc(rewritten_query)
+        chunks = step_2_search_embedding_hyde(
             rewritten_query=rewritten_query,
-            hyde_doc=hyde_doc,
+            hyde_doc=doc,
             item_names=item_names,
             req_limit=HYDE_REQ_LIMIT,
             top_k=HYDE_TOPK,
             ranker_weights=HYDE_RANKER_WEIGHTS,
         )
-        query_cache_service.set_retrieval_cache(
-            retrieval_type="hyde",
-            query=stable_query,
-            item_names=item_names,
-            topk=HYDE_TOPK,
-            retrieval_result={
-                "hyde_embedding_chunks": hyde_embedding_chunks,
-                "hyde_doc": hyde_doc,
-            },
-        )
+        return chunks, {"hyde_doc": doc}
 
-    query_cache_service.record_stage_cache_result(
-        state,
-        stage="retrieval_hyde",
-        cache_hit=cache_hit,
-        detail={
-            "item_names": item_names,
-            "topk_count": len(hyde_embedding_chunks),
-            "hyde_doc_length": len(hyde_doc or ""),
-        },
+    (hyde_embedding_chunks, cache_hit, extra) = RetrievalCache.execute(
+        state=state,
+        retrieval_type="hyde",
+        topk=HYDE_TOPK,
+        compute_fn=_compute_hyde,
+        result_key="hyde_embedding_chunks",
+        extra_cache_keys=["hyde_doc"],
     )
+    hyde_doc = extra.get("hyde_doc", "")
     hit_count = len(hyde_embedding_chunks)
     logger.info(
         f"node_search_embedding_hyde 执行完成，命中 {hit_count} 条结果，"
@@ -114,7 +88,6 @@ def node_search_embedding_hyde(state):
         retrieval_round=int(state.get("retrieval_round", 1)),
         payload={
             "query": rewritten_query,
-            "stable_query": stable_query,
             "item_names": item_names,
             "hit_count": hit_count,
             "hyde_doc_length": len(hyde_doc or ""),

@@ -18,14 +18,20 @@ RRF 倒数排名融合节点 (Reciprocal Rank Fusion Node)
 
 import sys
 from typing import List, Dict, Any
+
 from app.utils.task_utils import add_running_task, add_done_task
 from app.utils.debug_trace_utils import append_trace_event
 from app.core.logger import logger
+from app.query_process.agent.retrieval_result import collect_retrieval_results
 
 # ==================== Java 开发者阅读提示 ====================
-# 这个节点负责“多路召回结果融合”。
+# 这个节点负责"多路召回结果融合"。
 # 不同检索通道各自返回一批候选文档，这里用 RRF 把它们合并成一个统一排序。
-# 你可以把它理解成：让多路检索结果做一次“综合投票”。
+# 你可以把它理解成：让多路检索结果做一次"综合投票"。
+#
+# 【解耦变更】: 不再硬编码仅支持 Embedding/HyDE 两路。
+# 改为通过 collect_retrieval_results(state) 动态收集所有活跃检索源。
+# 新增检索路只需在 tool_registry 注册即可自动参与 RRF 融合。
 # ===========================================================
 
 
@@ -172,45 +178,55 @@ def node_rrf(state):
     RRF (Reciprocal Rank Fusion) 倒数排名融合节点
     
     功能：
-    将来自不同检索源（如 Embedding 检索、HyDE 检索、知识图谱检索等）的结果进行融合排序。
+    将来自不同检索源（Embedding / HyDE / KG / Web 等）的结果进行融合排序。
     RRF 是一种无需训练的算法，仅根据文档在不同列表中的排名来计算最终得分。
     
     步骤：
-    1. 提取各路检索结果：从 state 中获取 embedding_chunks 和 hyde_embedding_chunks。
+    1. 动态收集检索结果：通过 collect_retrieval_results(state) 收集所有活跃源。
     2. 结果标准化：将不同格式的检索结果统一转换为包含 chunk_id 的实体列表。
-    3. 设置权重：为不同来源分配权重（当前配置：Embedding=1.0, HyDE=1.0）。
+    3. 设置权重：从 RetrievalSource.weight 读取各来源权重。
     4. 执行 RRF：计算融合分数并重新排序。
     5. 结果截断：保留 Top K 个结果。
     6. 更新状态：将融合后的结果存入 state["rrf_chunks"]。
     """
     logger.info("---RRF (倒数排名融合) 开始处理---")
     # 节点职责：
-    # 1. 把 embedding 与 HyDE 两路本地召回做统一格式化
-    # 2. 用 RRF 做一次粗融合排序
-    # 3. 输出 rrf_chunks，交给下游 rerank 做精排
+    # 1. 动态收集所有活跃检索源的召回结果
+    # 2. 统一格式化为 entity dict 列表
+    # 3. 用 RRF 做一次粗融合排序
+    # 4. 输出 rrf_chunks，交给下游 rerank 做精排
     add_running_task(state["session_id"], sys._getframe().f_code.co_name, state.get("is_stream"))
 
-    # 第一步：获取上游检索节点返回的文档
-    # 上游检索节点（Milvus hybrid_search）返回的通常是 hit 列表：
-    #  {"entity": {...fields...}, "distance": ...}
-    # RRF 需要使用 chunk_id 做去重与计分，因此这里必须保留 entity（而不是仅抽取 content 字符串）。
-    embedding_chunks = _as_entity_list(state.get("embedding_chunks"))
-    hyde_embedding_chunks = _as_entity_list(state.get("hyde_embedding_chunks"))
+    # 第一步：动态收集所有活跃检索源的结果
+    # collect_retrieval_results() 会检查各路的 run_xxx 开关和实际返回的 chunk 列表，
+    # 只收集"开关已打开 且 返回了非空结果"的路。
+    retrieval_sources = collect_retrieval_results(state)
+    logger.info(f"RRF 输入统计: 共 {len(retrieval_sources)} 路活跃检索源")
 
-    logger.info(f"RRF 输入统计: Embedding源={len(embedding_chunks)}条, HyDE源={len(hyde_embedding_chunks)}条")
-    
-    # Debug 日志：打印部分 ID 以便核对
-    if embedding_chunks:
-        logger.debug(f"Embedding源 chunk_ids (前5个): {[c.get('chunk_id') for c in embedding_chunks[:5]]}")
-    if hyde_embedding_chunks:
-        logger.debug(f"HyDE源 chunk_ids (前5个): {[c.get('chunk_id') for c in hyde_embedding_chunks[:5]]}")
+    if not retrieval_sources:
+        logger.warning("RRF: 没有活跃的检索源，返回空结果")
+        add_done_task(state['session_id'], sys._getframe().f_code.co_name, state.get("is_stream"))
+        return {"rrf_chunks": []}
 
-    # 第二步：为不同来源设置权重
-    # 当前策略：两路召回权重相等，均为 1.0
-    source_weights = [
-        (embedding_chunks, 1.0),
-        (hyde_embedding_chunks, 1.0)
-    ]
+    # 第二步：对各路结果做统一格式化并设置权重
+    source_weights = []
+    source_stats = {}
+    for source in retrieval_sources:
+        formatted = _as_entity_list(source.chunks)
+        if not formatted:
+            continue
+        source_weights.append((formatted, source.weight))
+        source_stats[source.name] = len(formatted)
+        if formatted:
+            logger.debug(f"{source.name}源 chunk_ids (前5个): {[c.get('chunk_id') or c.get('id') for c in formatted[:5]]}")
+
+    if not source_weights:
+        logger.warning("RRF: 格式化后没有有效结果，返回空")
+        add_done_task(state['session_id'], sys._getframe().f_code.co_name, state.get("is_stream"))
+        return {"rrf_chunks": []}
+
+    for src_name, count in source_stats.items():
+        logger.info(f"RRF 路 [{src_name}]: {count}条")
 
     # 第三步：应用带权重的RRF计算最终得分
     # k=60 是 RRF 算法的经典常数，max_results=10 限制最终召回数量
@@ -223,8 +239,7 @@ def node_rrf(state):
         node="node_rrf",
         retrieval_round=int(state.get("retrieval_round", 1)),
         payload={
-            "embedding_input_count": len(embedding_chunks),
-            "hyde_input_count": len(hyde_embedding_chunks),
+            "source_stats": source_stats,
             "rrf_output_count": len(rrf_chunks),
             "top_chunk_ids": [
                 (doc.get("chunk_id") or doc.get("id"))

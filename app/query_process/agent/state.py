@@ -23,6 +23,15 @@
     2. 规划层：intent、task_type、selected_tools
     3. 检索层：各路召回结果、融合结果、重排结果
     4. 治理与输出层：evidence_status、missing_facts、citations、answer
+
+    【解耦变更】新增 state_layered.py 提供类型安全的分层访问器：
+    - get_input(state) / set_input(state, layer)      → InputLayer
+    - get_plan(state) / set_plan(state, layer)        → PlanLayer
+    - get_controls(state) / set_controls(state, layer) → ControlsLayer
+    - get_results(state) / set_results(state, layer)   → ResultsLayer
+    - get_fusion(state) / set_fusion(state, layer)     → FusionLayer
+    - get_evidence(state) / set_evidence(state, layer) → EvidenceLayer
+    - get_output(state) / set_output(state, layer)     → OutputLayer
 """
 from typing import Any, Dict, List, Literal, Optional
 from typing_extensions import TypedDict

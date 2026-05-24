@@ -15,7 +15,7 @@ from typing import Dict, List
 
 from app.core.logger import logger
 from app.lm.reranker_utils import get_reranker_model
-from app.query_process.agent.services import cache_key_service, query_cache_service
+from app.query_process.agent.services.cache_decorator import RerankCache
 from app.utils.debug_trace_utils import append_trace_event
 from app.utils.task_utils import add_done_task, add_running_task
 
@@ -46,37 +46,18 @@ def node_rerank(state):
     )
 
     doc_items = step_1_merge_docs(state)
-    rerank_query = cache_key_service.resolve_stable_query_text(
-        original_query=state.get("original_query") or "",
-        rewritten_query=state.get("rewritten_query") or "",
-        item_names=state.get("item_names") or [],
-    )
-    cached_result = query_cache_service.get_rerank_cache(
-        query=rerank_query,
+
+    def _compute_rerank():
+        """执行 rerank + 动态 TopK 截断，返回截断后的文档列表。"""
+        scored = step_2_rerank_docs(state, doc_items)
+        return step_3_topk(scored)
+
+    topk_docs, cache_hit = RerankCache.execute(
+        state=state,
         candidate_docs=doc_items,
+        compute_fn=_compute_rerank,
     )
-
-    if cached_result:
-        logger.info("Rerank 命中缓存，跳过 reranker 模型调用")
-        topk_docs = list(cached_result.get("reranked_docs") or [])
-        scored_docs = topk_docs
-        cache_hit = True
-    else:
-        cache_hit = False
-        scored_docs = step_2_rerank_docs(state, doc_items)
-        topk_docs = step_3_topk(scored_docs)
-        query_cache_service.set_rerank_cache(
-            query=rerank_query,
-            candidate_docs=doc_items,
-            rerank_result={"reranked_docs": topk_docs},
-        )
-
-    query_cache_service.record_stage_cache_result(
-        state,
-        stage="rerank",
-        cache_hit=cache_hit,
-        detail={"candidate_count": len(doc_items), "topk_count": len(topk_docs)},
-    )
+    scored_docs = topk_docs
     logger.info(f"Rerank 节点处理结束，最终输出 {len(topk_docs)} 条文档")
 
     append_trace_event(

@@ -11,6 +11,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.core.logger import logger
 from app.lm.llm_utils import get_llm_client
 from app.query_process.agent.state import QueryGraphState
+from app.query_process.agent.tool_registry import get_retry_upgrade_tools
 from app.utils.debug_trace_utils import append_trace_event
 from app.utils.task_utils import add_done_task, add_running_task
 
@@ -116,41 +117,6 @@ def _rewrite_followup_query_with_llm(state: QueryGraphState) -> tuple[str, str]:
     return followup_query, retry_intent
 
 
-def _upgrade_tools_for_retry(state: QueryGraphState) -> list:
-    # 执行步骤：
-    # 1. 保留原有工具
-    # 2. 强制保留 embedding + hyde，确保本地召回宽度
-    # 3. 根据 missing_facts 决定是否补 web_search / kg
-    selected_tools = state.get("selected_tools") or []
-    if not isinstance(selected_tools, list):
-        selected_tools = []
-
-    upgraded = []
-    for tool in selected_tools:
-        if tool not in upgraded:
-            upgraded.append(tool)
-
-    # Second-round retrieval should always keep local KB recall wide enough.
-    for tool in ["embedding", "hyde"]:
-        if tool not in upgraded:
-            upgraded.append(tool)
-
-    missing_text = " ".join(str(x) for x in (state.get("missing_facts") or []))
-    web_keywords = ["官网", "驱动", "下载", "版本", "价格", "最新", "外部", "网页", "蓝牙", "wifi", "wi-fi", "类型", "介绍", "功能"]
-    kg_keywords = ["关系", "依赖", "拓扑", "连接关系", "上下游", "结构"]
-
-    if any(word in missing_text for word in web_keywords) and "web_search" not in upgraded:
-        upgraded.append("web_search")
-
-    if any(word in missing_text for word in kg_keywords) and "kg" not in upgraded:
-        upgraded.append("kg")
-
-    if "web_search" not in upgraded:
-        upgraded.append("web_search")
-
-    return upgraded
-
-
 def node_dynamic_reretrieval(state: QueryGraphState) -> QueryGraphState:
     """
     动态补检索主节点。
@@ -180,7 +146,10 @@ def node_dynamic_reretrieval(state: QueryGraphState) -> QueryGraphState:
         followup_query = _build_followup_query_rule(state)
         retry_intent = "fallback_rule_rewrite"
 
-    selected_tools = _upgrade_tools_for_retry(state)
+    selected_tools = get_retry_upgrade_tools(
+        current_tools=state.get("selected_tools") or [],
+        missing_facts=state.get("missing_facts") or [],
+    )
 
     state["retrieval_round"] = next_round
     state["followup_query"] = followup_query

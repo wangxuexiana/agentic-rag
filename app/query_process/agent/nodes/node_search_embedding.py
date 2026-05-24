@@ -21,7 +21,7 @@ from app.clients.milvus_utils import (
 )
 from app.core.logger import logger
 from app.lm.embedding_utils import generate_embeddings
-from app.query_process.agent.services import cache_key_service, query_cache_service
+from app.query_process.agent.services.cache_decorator import RetrievalCache
 from app.utils.debug_trace_utils import append_trace_event
 from app.utils.escape_milvus_string_utils import escape_milvus_string
 from app.utils.task_utils import add_done_task, add_running_task
@@ -49,39 +49,14 @@ def node_search_embedding(state):
 
     query = state.get("rewritten_query") or state.get("original_query") or ""
     item_names = state.get("item_names") or []
-    stable_query = cache_key_service.resolve_stable_query_text(
-        original_query=state.get("original_query") or "",
-        rewritten_query=state.get("rewritten_query") or "",
-        item_names=item_names,
-    )
     logger.info(f"本地检索输入: query='{query}', item_names={item_names}")
 
-    cached_result = query_cache_service.get_retrieval_cache(
+    embedding_chunks, cache_hit, _ = RetrievalCache.execute(
+        state=state,
         retrieval_type="embedding",
-        query=stable_query,
-        item_names=item_names,
         topk=RETRIEVAL_TOPK,
-    )
-    if cached_result:
-        logger.info("Embedding retrieval 命中缓存，跳过 embedding 生成与 Milvus 检索")
-        embedding_chunks = list(cached_result.get("embedding_chunks") or [])
-        cache_hit = True
-    else:
-        cache_hit = False
-        embedding_chunks = _run_embedding_search(query=query, item_names=item_names)
-        query_cache_service.set_retrieval_cache(
-            retrieval_type="embedding",
-            query=stable_query,
-            item_names=item_names,
-            topk=RETRIEVAL_TOPK,
-            retrieval_result={"embedding_chunks": embedding_chunks},
-        )
-
-    query_cache_service.record_stage_cache_result(
-        state,
-        stage="retrieval_embedding",
-        cache_hit=cache_hit,
-        detail={"item_names": item_names, "topk_count": len(embedding_chunks)},
+        compute_fn=lambda: _run_embedding_search(query=query, item_names=item_names),
+        result_key="embedding_chunks",
     )
     hit_count = len(embedding_chunks)
     logger.info(f"node_search_embedding 执行完成，命中 {hit_count} 条结果，cache_hit={cache_hit}")
@@ -92,7 +67,6 @@ def node_search_embedding(state):
         retrieval_round=int(state.get("retrieval_round", 1)),
         payload={
             "query": query,
-            "stable_query": stable_query,
             "item_names": item_names,
             "hit_count": hit_count,
             "retrieval_cache_hit": cache_hit,
